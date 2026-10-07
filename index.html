@@ -171,11 +171,10 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
       <textarea id="postsIn" placeholder="Select the posts or comments on the page, copy, and paste here. Buttons, timestamps, and reaction counts are fine, Claude skips them."></textarea>
       <label class="toggle" for="smartChk"><input type="checkbox" id="smartChk" checked><span>Smart read: Claude cleans up the paste and finds each post</span></label>
       <p class="small" id="smartNote">Turn this off to split posts yourself with a blank line or a line of ---.</p>
-      <label class="lbl" for="critIn">Your reply criteria <span class="hint">optional</span></label>
-      <textarea id="critIn" class="short" placeholder="Example: Reply to genuine questions and warm praise. Skip spam, arguments, and anything about politics."></textarea>
       <div class="row">
         <span class="counter" id="counter" aria-live="polite">0 / 40 posts</span>
       </div>
+      <p class="small" id="critNote"></p>
       <div class="row">
         <button class="btn" id="runBtn" type="button">Find posts worth a reply</button>
         <button class="btn ghost" id="clearBtn" type="button">Clear</button>
@@ -203,6 +202,11 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
       <label class="lbl" for="keyIn">Anthropic API key</label>
       <input type="password" id="keyIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-...">
       <p class="small">Stored only in this browser. It is sent only to api.anthropic.com.</p>
+    </div>
+    <div class="field">
+      <label class="lbl" for="critIn">Your reply criteria <span class="hint">optional</span></label>
+      <textarea id="critIn" class="short" placeholder="Example: Reply to genuine questions and warm praise. Skip spam, arguments, and anything about politics."></textarea>
+      <p class="small">Claude applies these every time it reads a batch. They save as you type.</p>
     </div>
     <div class="field">
       <label class="lbl" for="sessIn">Session name</label>
@@ -304,6 +308,10 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
       .trim();
   }
   function smartOn() { return $('smartChk').checked; }
+  function updateCritNote() {
+    var has = $('critIn').value.trim().length > 0;
+    $('critNote').textContent = has ? 'Using your reply criteria from Settings.' : 'No reply criteria set. You can add some in Settings (the gear).';
+  }
   function updateCounter() {
     var c = $('counter');
     var v = $('postsIn').value;
@@ -733,6 +741,8 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     $('smartChk').addEventListener('change', function () { lsSet(K_SMART, $('smartChk').checked ? '1' : '0'); updateCounter(); });
     $('postsIn').addEventListener('input', updateCounter);
     $('critIn').value = lsGet(K_CRIT) || '';
+    $('critIn').addEventListener('input', function () { lsSet(K_CRIT, $('critIn').value); updateCritNote(); });
+    updateCritNote();
     $('runBtn').addEventListener('click', analyze);
     $('clearBtn').addEventListener('click', function () {
       $('postsIn').value = '';

@@ -9,7 +9,7 @@ Portfolio: https://augustineiacopelli.github.io/appaday/
 
 ## What it does
 
-Copy a page of posts or comments and paste it in exactly as it comes, interface clutter and all. With Smart read on, Claude cleans up the paste: it drops buttons like Like and Reply, timestamps, reaction counts, and badges, joins lines that wrapped mid sentence, and finds each distinct post and its author, up to 40 per run. In the same single request it gives every post a verdict of reply now, reply later, or skip, a short category label, and a one line reason. You can add your own reply criteria in Settings, such as "reply to real questions, skip arguments and spam," and Claude applies them to every batch.
+Copy a page of posts or comments and paste it in exactly as it comes, interface clutter and all. With Smart read on, Claude cleans up the paste: it drops buttons like Like and Reply, timestamps, reaction counts, and badges, joins lines that wrapped mid sentence, and finds each distinct post and its author, up to 40 per run. Facebook style clutter is stripped out before Claude sees the text, and a long paste is read in parts of about 12,000 characters so posts are not skipped. It gives every post a verdict of reply now, reply later, or skip, a short category label, and a one line reason. You can add your own reply criteria in Settings, such as "reply to real questions, skip arguments and spam," and Claude applies them to every batch.
 
 Each result card has Open, Later, and Done buttons so you can work through the list, and the results can be filtered by verdict, category, and status. Statuses and results are saved in your browser under a session name, so a half finished inbox is still there when you come back.
 
@@ -20,7 +20,7 @@ Each result card has Open, Later, and Done buttons so you can work through the l
 3. Tap the button. Results appear below with a tally and filters.
 4. Mark cards Open, Later, or Done as you reply.
 
-If the paste holds more than 40 posts, Claude reads the first 40 and the app tells you how many it found. Smart read can be switched off for a classic mode where you split posts yourself with a blank line or a line of three dashes, and the app remembers your choice.
+If the paste holds more than 40 posts, Claude reads the first 40 and the app tells you how many it found. If the paste looks like it holds many more comments than were found, or part of it failed, the app warns you so you can run it again. Smart read can be switched off for a classic mode where you split posts yourself with a blank line or a line of three dashes, and the app remembers your choice.
 
 ## Notes
 

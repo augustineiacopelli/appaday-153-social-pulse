@@ -227,6 +227,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
 
   var MAX_POSTS = 40;
   var MAX_CHARS = 60000;
+  var CHUNK_CHARS = 12000;
   var MODEL_FALLBACK = { haiku: 'claude-haiku-4-5-20251001', sonnet: 'claude-sonnet-5' };
   var K_KEY = 'sp153-apikey', K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria', K_SMART = 'sp153-smart';
   var VERDICTS = { reply_now: 'Reply now', reply_later: 'Reply later', skip: 'Skip' };
@@ -439,18 +440,58 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     return s;
   }
 
-  function buildSmartPrompt(raw, criteria) {
+  var CHROME_LINE = /^(like|reply|share|comment|comments|follow|following|see more|see less|see translation|translate|send|edited|author|admin|top fan|rising fan|most relevant|newest|oldest|all comments|top comments|write a comment\.*|write a public comment\.*|sponsored|suggested for you|view more comments|view previous comments|hide|hide all|all reactions:?|reply as .*|\d{1,5}|\d+(\.\d+)?[km]?|just now|yesterday|\u00b7|\.|\u2026)$/i;
+  var CHROME_COMBO = /^((like|reply|share|comment|\u00b7|\u2022|\s)+|(like|reply|share|\u00b7|\u2022|\s)*\d+\s*(s|m|min|mins|h|hr|hrs|d|w|wk|y|yr)\b.*)$/i;
+  var CHROME_PHRASE = /^(view( all)? \d+ (more )?(repl(y|ies)|comments?)|\d+ (comments?|shares?|likes?|repl(y|ies))|\d+ (second|minute|hour|day|week|month|year)s? ago|[a-z]+ and \d+ others?|replied \u00b7 \d+ repl(y|ies))$/i;
+  function stripChrome(text) {
+    var lines = String(text || '').split('\n'), out = [];
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t) { out.push(''); continue; }
+      if (t.length <= 40 && (CHROME_LINE.test(t) || CHROME_COMBO.test(t) || CHROME_PHRASE.test(t))) continue;
+      out.push(lines[i]);
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function estimateComments(text) {
+    var lines = String(text || '').split('\n'), n = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (/^reply$/i.test(t) || /^like\s+reply\b/i.test(t)) n++;
+    }
+    return n;
+  }
+  function chunkText(text, size) {
+    var lines = String(text || '').split('\n'), chunks = [], cur = '';
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      while (line.length > size) {
+        if (cur) { chunks.push(cur); cur = ''; }
+        chunks.push(line.slice(0, size));
+        line = line.slice(size);
+      }
+      if (cur && cur.length + line.length + 1 > size) { chunks.push(cur); cur = ''; }
+      cur += (cur ? '\n' : '') + line;
+    }
+    if (cur.trim()) chunks.push(cur);
+    return chunks;
+  }
+  function buildSmartPrompt(raw, criteria, part, parts) {
     var sys = 'You clean up and triage text that a person copied and pasted from a social media page such as Facebook, Instagram, LinkedIn, X, Reddit, or YouTube comments. ' +
-      'The paste is messy. It may contain interface text such as Like, Reply, Share, Follow, Translate, See more, View replies, reaction counts, timestamps like 3h or 2 days ago, badges, ads, repeated names, and lines broken in the middle of a sentence. ' +
-      'First find each distinct post or comment written by a person, in the order it appears. Ignore interface text, duplicates, and the page owner\'s own replies when they are clearly labeled as such. ' +
+      'The paste is messy. It may contain leftover interface text such as Like, Reply, Share, Follow, See more, View replies, reaction counts, timestamps, badges, ads, repeated names, and lines broken in the middle of a sentence. ' +
+      'Your first job is COMPLETENESS. Find every distinct post or comment written by a person, in the order it appears, and never leave one out. ' +
+      'Include short comments, one word comments, emoji only comments, replies nested under other comments, and the page owner\'s own replies. Do not judge worth while finding posts. Low value posts still get listed, and the skip verdict is where they belong. ' +
+      'Only leave out interface text, ads, and exact duplicates. When you are unsure whether something is a post, include it. ' +
       'Join wrapped lines into natural paragraphs. Keep the author name when it is clear, otherwise use an empty string. Never rewrite, correct, or summarize the wording of a post. Keep each post under 500 characters and end it with an ellipsis if you must cut it. ' +
-      'Then give each post a verdict: reply_now (a reply would clearly be valuable and timely), reply_later (worth a reply but not urgent), or skip (spam, bait, noise, or nothing to add). ' +
+      'The text may start or end in the middle of a post. Include partial posts rather than dropping them. ' +
+      'Your second job is the verdict for each post: reply_now (a reply would clearly be valuable and timely), reply_later (worth a reply but not urgent), or skip (spam, bait, noise, or nothing to add). ' +
       'Also give a category of one or two words (for example Question, Praise, Complaint, Opportunity, Debate, Spam, Update) and a reason of one plain sentence under 20 words. Apply the reply criteria from the person when they are given. ' +
-      'Return at most ' + MAX_POSTS + ' posts. If the paste holds more, still return the first ' + MAX_POSTS + ' and put the true count in total_found. ' +
+      'Return at most ' + MAX_POSTS + ' posts. If the text holds more, still return the first ' + MAX_POSTS + ' and put the true count in total_found. ' +
       'Respond with ONLY a JSON object and no other text: {"total_found":3,"posts":[{"id":1,"author":"Name","text":"...","verdict":"reply_now","category":"Question","reason":"..."}]}';
     var lines = [];
     if (criteria) lines.push('Reply criteria from the person:\n' + criteria + '\n');
-    lines.push('Pasted text:\n' + raw.slice(0, MAX_CHARS));
+    if (parts > 1) lines.push('This is part ' + part + ' of ' + parts + ' of a longer paste.\n');
+    lines.push('Pasted text:\n' + raw);
     return { system: sys, user: lines.join('\n') };
   }
   function cleanPostFields(o, i) {
@@ -525,25 +566,60 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
       var items = [], notes = [];
       var body;
       if (smart) {
-        var sp = buildSmartPrompt(raw, criteria);
-        body = {
-          model: model,
-          max_tokens: 12000,
-          thinking: { type: THINK_MODE[model] || 'disabled' },
-          system: sp.system,
-          messages: [{ role: 'user', content: sp.user }]
-        };
-        var sdata = await callApiThinking(key, body);
-        var sp2 = parseSmart(extractText(sdata));
-        if (!sp2.posts.length) {
-          var sinfo = describeEmpty(sdata);
-          throw new Error('Claude did not find any posts in that paste (' + sinfo + '). Try again, or turn off Smart read and split the posts yourself.');
+        var estimate = estimateComments(raw);
+        var cleaned = stripChrome(raw).slice(0, MAX_CHARS);
+        var chunks = chunkText(cleaned, CHUNK_CHARS);
+        if (!chunks.length) throw new Error('There was no readable text left in that paste after the buttons and timestamps were removed.');
+        var doneCount = 0;
+        function progress() {
+          if (chunks.length > 1) btn.lastChild.nodeValue = 'Reading part ' + Math.min(doneCount + 1, chunks.length) + ' of ' + chunks.length + '...';
         }
-        items = sp2.posts.slice(0, MAX_POSTS).map(function (r, i) {
+        progress();
+        var settled = await Promise.all(chunks.map(function (chunk, ci) {
+          var sp = buildSmartPrompt(chunk, criteria, ci + 1, chunks.length);
+          var cbody = {
+            model: model,
+            max_tokens: 12000,
+            thinking: { type: THINK_MODE[model] || 'disabled' },
+            system: sp.system,
+            messages: [{ role: 'user', content: sp.user }]
+          };
+          return callApiThinking(key, cbody).then(function (d) {
+            doneCount++; progress();
+            return { ok: true, data: d, parsed: parseSmart(extractText(d)) };
+          }, function (err) {
+            doneCount++; progress();
+            return { ok: false, error: err };
+          });
+        }));
+        var merged = [], seen = {}, totalFound = 0, failed = 0, firstInfo = '', firstErr = null;
+        for (var si = 0; si < settled.length; si++) {
+          var st = settled[si];
+          if (!st.ok) { failed++; if (!firstErr) firstErr = st.error; continue; }
+          if (!st.parsed.posts.length) { failed++; if (!firstInfo) firstInfo = describeEmpty(st.data); continue; }
+          totalFound += st.parsed.total;
+          for (var pi = 0; pi < st.parsed.posts.length; pi++) {
+            var pp = st.parsed.posts[pi];
+            var dk = (pp.author + '|' + pp.text).toLowerCase();
+            if (seen[dk]) continue;
+            seen[dk] = true;
+            merged.push(pp);
+          }
+        }
+        if (!merged.length) {
+          if (firstErr) throw firstErr;
+          throw new Error('Claude did not find any posts in that paste (' + firstInfo + '). Try again, or turn off Smart read and split the posts yourself.');
+        }
+        items = merged.slice(0, MAX_POSTS).map(function (r, i) {
           return { id: i + 1, author: r.author, text: r.text, verdict: r.verdict, category: r.category, reason: r.reason, status: 'Open' };
         });
-        if (sp2.total > items.length) notes.push('Claude found ' + sp2.total + ' posts and read the first ' + items.length + '.');
+        var foundAll = Math.max(totalFound, merged.length);
+        if (foundAll > items.length) notes.push('Claude found ' + foundAll + ' posts and read the first ' + items.length + '.');
         if (raw.length > MAX_CHARS) notes.push('Only the first ' + MAX_CHARS + ' characters of the paste were read.');
+        if (failed > 0) notes.push(failed + ' of ' + chunks.length + ' parts of the paste came back empty or failed, so some posts may be missing. Run it again to retry.');
+        if (estimate > 0 && merged.length < Math.min(estimate, MAX_POSTS) * 0.75) {
+          notes.push('Your paste looks like it holds about ' + estimate + ' comments but ' + merged.length + ' were found. Try again, or paste it in smaller pieces.');
+        }
       } else {
         var capped = all.length > MAX_POSTS;
         var posts = all.slice(0, MAX_POSTS);
@@ -761,7 +837,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     updateCounter();
     renderAll();
   }
-  window.__sp = { splitPosts: splitPosts, parseResults: parseResults, parseSmart: parseSmart, normalizeRaw: normalizeRaw, MAX_POSTS: MAX_POSTS };
+  window.__sp = { stripChrome: stripChrome, estimateComments: estimateComments, chunkText: chunkText, splitPosts: splitPosts, parseResults: parseResults, parseSmart: parseSmart, normalizeRaw: normalizeRaw, MAX_POSTS: MAX_POSTS };
   init();
 })();
 </script>

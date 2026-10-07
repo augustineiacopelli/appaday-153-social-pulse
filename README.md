@@ -9,19 +9,19 @@ Portfolio: https://augustineiacopelli.github.io/appaday/
 
 ## What it does
 
-Paste up to 40 posts or comments, separated by a blank line or a line of three dashes. Claude reads the whole batch in a single request and gives every post a verdict of reply now, reply later, or skip, a short category label, and a one line reason. You can add your own reply criteria, such as "reply to real questions, skip arguments and spam," and Claude applies them to the batch.
+Copy a page of posts or comments and paste it in exactly as it comes, interface clutter and all. With Smart read on, Claude cleans up the paste: it drops buttons like Like and Reply, timestamps, reaction counts, and badges, joins lines that wrapped mid sentence, and finds each distinct post and its author, up to 40 per run. In the same single request it gives every post a verdict of reply now, reply later, or skip, a short category label, and a one line reason. You can add your own reply criteria, such as "reply to real questions, skip arguments and spam," and Claude applies them to the batch.
 
 Each result card has Open, Later, and Done buttons so you can work through the list, and the results can be filtered by verdict, category, and status. Statuses and results are saved in your browser under a session name, so a half finished inbox is still there when you come back.
 
 ## How to use it
 
 1. Tap the gear button and enter your Anthropic API key. Optionally give the session a name.
-2. Paste your posts into the box. The counter shows how many were found out of the 40 allowed.
+2. Paste straight from the page into the box. The counter shows how much of the 60,000 character limit you have used.
 3. Optionally write your reply criteria.
 4. Tap the button. Results appear below with a tally and filters.
 5. Mark cards Open, Later, or Done as you reply.
 
-If more than 40 posts are pasted, only the first 40 are read and the app says so.
+If the paste holds more than 40 posts, Claude reads the first 40 and the app tells you how many it found. Smart read can be switched off for a classic mode where you split posts yourself with a blank line or a line of three dashes, and the app remembers your choice.
 
 ## Notes
 

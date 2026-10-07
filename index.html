@@ -143,6 +143,9 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
 .modal h2 { margin: 0; font-size: 1.2rem; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .small { font-size: 0.82em; color: var(--muted); margin: 0; }
+.toggle { display: flex; gap: 10px; align-items: center; min-height: 44px; cursor: pointer; font-size: 0.92em; }
+.toggle input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--accent); }
+.author { font-weight: 700; font-size: 0.9em; overflow-wrap: anywhere; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 </head>
@@ -164,8 +167,10 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     </div>
 
     <section class="panel" id="intake" aria-label="Intake">
-      <label class="lbl" for="postsIn">Posts or comments <span class="hint">separate with a blank line or a line of ---</span></label>
-      <textarea id="postsIn" placeholder="Paste a batch of posts here. One post per paragraph, or divide them with a line that says ---"></textarea>
+      <label class="lbl" for="postsIn">Posts or comments <span class="hint">paste straight from the page, mess and all</span></label>
+      <textarea id="postsIn" placeholder="Select the posts or comments on the page, copy, and paste here. Buttons, timestamps, and reaction counts are fine, Claude skips them."></textarea>
+      <label class="toggle" for="smartChk"><input type="checkbox" id="smartChk" checked><span>Smart read: Claude cleans up the paste and finds each post</span></label>
+      <p class="small" id="smartNote">Turn this off to split posts yourself with a blank line or a line of ---.</p>
       <label class="lbl" for="critIn">Your reply criteria <span class="hint">optional</span></label>
       <textarea id="critIn" class="short" placeholder="Example: Reply to genuine questions and warm praise. Skip spam, arguments, and anything about politics."></textarea>
       <div class="row">
@@ -217,8 +222,9 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
   'use strict';
 
   var MAX_POSTS = 40;
+  var MAX_CHARS = 60000;
   var MODEL_FALLBACK = { haiku: 'claude-haiku-4-5-20251001', sonnet: 'claude-sonnet-5' };
-  var K_KEY = 'sp153-apikey', K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria';
+  var K_KEY = 'sp153-apikey', K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria', K_SMART = 'sp153-smart';
   var VERDICTS = { reply_now: 'Reply now', reply_later: 'Reply later', skip: 'Skip' };
   var STATUSES = ['Open', 'Later', 'Done'];
 
@@ -288,11 +294,29 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     }
     return out;
   }
+  function normalizeRaw(text) {
+    return String(text || '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
+      .replace(/[\u00a0\u202f\u2007]/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  function smartOn() { return $('smartChk').checked; }
   function updateCounter() {
-    var n = splitPosts($('postsIn').value).length;
     var c = $('counter');
-    c.textContent = n + ' / ' + MAX_POSTS + ' posts' + (n > MAX_POSTS ? ' (only the first ' + MAX_POSTS + ' will be read)' : '');
-    c.className = 'counter' + (n > MAX_POSTS ? ' over' : '');
+    var v = $('postsIn').value;
+    if (smartOn()) {
+      var n = normalizeRaw(v).length;
+      c.textContent = n + ' / ' + MAX_CHARS + ' characters, up to ' + MAX_POSTS + ' posts' + (n > MAX_CHARS ? ' (only the first ' + MAX_CHARS + ' characters will be read)' : '');
+      c.className = 'counter' + (n > MAX_CHARS ? ' over' : '');
+    } else {
+      var k = splitPosts(v).length;
+      c.textContent = k + ' / ' + MAX_POSTS + ' posts' + (k > MAX_POSTS ? ' (only the first ' + MAX_POSTS + ' will be read)' : '');
+      c.className = 'counter' + (k > MAX_POSTS ? ' over' : '');
+    }
+    $('smartNote').textContent = smartOn() ? 'Claude drops buttons, timestamps, and reaction counts, and joins lines that wrapped mid sentence.' : 'Smart read is off. Separate posts with a blank line or a line of ---.';
   }
   function showMsg(node, kind, text) {
     clear(node);
@@ -407,15 +431,76 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     return s;
   }
 
+  function buildSmartPrompt(raw, criteria) {
+    var sys = 'You clean up and triage text that a person copied and pasted from a social media page such as Facebook, Instagram, LinkedIn, X, Reddit, or YouTube comments. ' +
+      'The paste is messy. It may contain interface text such as Like, Reply, Share, Follow, Translate, See more, View replies, reaction counts, timestamps like 3h or 2 days ago, badges, ads, repeated names, and lines broken in the middle of a sentence. ' +
+      'First find each distinct post or comment written by a person, in the order it appears. Ignore interface text, duplicates, and the page owner\'s own replies when they are clearly labeled as such. ' +
+      'Join wrapped lines into natural paragraphs. Keep the author name when it is clear, otherwise use an empty string. Never rewrite, correct, or summarize the wording of a post. Keep each post under 500 characters and end it with an ellipsis if you must cut it. ' +
+      'Then give each post a verdict: reply_now (a reply would clearly be valuable and timely), reply_later (worth a reply but not urgent), or skip (spam, bait, noise, or nothing to add). ' +
+      'Also give a category of one or two words (for example Question, Praise, Complaint, Opportunity, Debate, Spam, Update) and a reason of one plain sentence under 20 words. Apply the reply criteria from the person when they are given. ' +
+      'Return at most ' + MAX_POSTS + ' posts. If the paste holds more, still return the first ' + MAX_POSTS + ' and put the true count in total_found. ' +
+      'Respond with ONLY a JSON object and no other text: {"total_found":3,"posts":[{"id":1,"author":"Name","text":"...","verdict":"reply_now","category":"Question","reason":"..."}]}';
+    var lines = [];
+    if (criteria) lines.push('Reply criteria from the person:\n' + criteria + '\n');
+    lines.push('Pasted text:\n' + raw.slice(0, MAX_CHARS));
+    return { system: sys, user: lines.join('\n') };
+  }
+  function cleanPostFields(o, i) {
+    if (!o || typeof o !== 'object') return null;
+    var v = normVerdict(o.verdict);
+    var text = String(o.text || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 700);
+    if (!v || !text) return null;
+    var cat = String(o.category || 'Other').replace(/\s+/g, ' ').trim().slice(0, 24) || 'Other';
+    cat = cat.charAt(0).toUpperCase() + cat.slice(1);
+    return {
+      id: i + 1,
+      author: String(o.author || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+      text: text,
+      verdict: v,
+      category: cat,
+      reason: String(o.reason || '').trim().slice(0, 240)
+    };
+  }
+  function parseSmart(text) {
+    var t = String(text || '').trim();
+    var out = { total: 0, posts: [] };
+    if (!t) return out;
+    t = t.replace(/^```[a-zA-Z]*\s*/, '').replace(/\s*```\s*$/, '');
+    var obj = null;
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) {
+      try { obj = JSON.parse(t.slice(a, b + 1)); } catch (e) { obj = null; }
+    }
+    var arr = null;
+    if (obj && Array.isArray(obj.posts)) { arr = obj.posts; out.total = parseInt(obj.total_found, 10) || 0; }
+    if (!arr) {
+      var a2 = t.indexOf('['), b2 = t.lastIndexOf(']');
+      if (a2 >= 0 && b2 > a2) { try { arr = JSON.parse(t.slice(a2, b2 + 1)); } catch (e) { arr = null; } }
+    }
+    if (!Array.isArray(arr)) {
+      arr = [];
+      var re = /\{[^{}]*\}/g, m;
+      while ((m = re.exec(t)) !== null) {
+        try { var o = JSON.parse(m[0]); if (o && o.text) arr.push(o); } catch (e) { /* skip bad fragment */ }
+      }
+    }
+    for (var i = 0; i < arr.length; i++) {
+      var p = cleanPostFields(arr[i], out.posts.length);
+      if (p) out.posts.push(p);
+    }
+    if (out.total < out.posts.length) out.total = out.posts.length;
+    return out;
+  }
+
   async function analyze() {
     if (state.busy) return;
     var msgNode = $('intakeMsg');
-    var all = splitPosts($('postsIn').value);
-    if (!all.length) { showMsg(msgNode, 'warn', 'Paste at least one post first.'); return; }
+    var smart = smartOn();
+    var raw = normalizeRaw($('postsIn').value);
+    var all = smart ? [] : splitPosts($('postsIn').value);
+    if (smart ? !raw : !all.length) { showMsg(msgNode, 'warn', 'Paste at least one post first.'); return; }
     var key = (lsGet(K_KEY) || '').trim();
     if (!key) { showMsg(msgNode, 'warn', 'Add your Anthropic API key with the gear button first.'); openSettings(); return; }
-    var capped = all.length > MAX_POSTS;
-    var posts = all.slice(0, MAX_POSTS);
     var criteria = $('critIn').value.trim();
     lsSet(K_CRIT, criteria);
 
@@ -424,48 +509,73 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     btn.disabled = true;
     clear(btn);
     btn.appendChild(el('span', 'spinner'));
-    btn.appendChild(document.createTextNode('Reading ' + posts.length + ' post' + (posts.length === 1 ? '' : 's') + '...'));
+    btn.appendChild(document.createTextNode(smart ? 'Reading the page...' : 'Reading ' + Math.min(all.length, MAX_POSTS) + ' post' + (all.length === 1 ? '' : 's') + '...'));
     showMsg(msgNode, 'ok', '');
 
     try {
       var model = await getModel(pickTier());
-      var p = buildPrompt(posts, criteria);
-      var body = {
-        model: model,
-        max_tokens: 6000,
-        thinking: { type: THINK_MODE[model] || 'disabled' },
-        system: p.system,
-        messages: [{ role: 'user', content: p.user }]
-      };
-      var data = await callApiThinking(key, body);
-      var parsed = parseResults(extractText(data));
-      if (!parsed.length) {
-        var info = describeEmpty(data);
-        throw new Error('Claude returned nothing I could read (' + info + '). Try again, or try fewer posts.');
-      }
-      var byId = {};
-      for (var i = 0; i < parsed.length; i++) byId[parsed[i].id] = parsed[i];
-      var items = [];
-      for (var j = 0; j < posts.length; j++) {
-        var r = byId[j + 1];
-        items.push({
-          id: j + 1,
-          text: posts[j],
-          verdict: r ? r.verdict : 'reply_later',
-          category: r ? r.category : 'Unrated',
-          reason: r ? r.reason : 'Claude did not return a verdict for this post.',
-          status: 'Open'
+      var items = [], notes = [];
+      var body;
+      if (smart) {
+        var sp = buildSmartPrompt(raw, criteria);
+        body = {
+          model: model,
+          max_tokens: 12000,
+          thinking: { type: THINK_MODE[model] || 'disabled' },
+          system: sp.system,
+          messages: [{ role: 'user', content: sp.user }]
+        };
+        var sdata = await callApiThinking(key, body);
+        var sp2 = parseSmart(extractText(sdata));
+        if (!sp2.posts.length) {
+          var sinfo = describeEmpty(sdata);
+          throw new Error('Claude did not find any posts in that paste (' + sinfo + '). Try again, or turn off Smart read and split the posts yourself.');
+        }
+        items = sp2.posts.slice(0, MAX_POSTS).map(function (r, i) {
+          return { id: i + 1, author: r.author, text: r.text, verdict: r.verdict, category: r.category, reason: r.reason, status: 'Open' };
         });
+        if (sp2.total > items.length) notes.push('Claude found ' + sp2.total + ' posts and read the first ' + items.length + '.');
+        if (raw.length > MAX_CHARS) notes.push('Only the first ' + MAX_CHARS + ' characters of the paste were read.');
+      } else {
+        var capped = all.length > MAX_POSTS;
+        var posts = all.slice(0, MAX_POSTS);
+        var p = buildPrompt(posts, criteria);
+        body = {
+          model: model,
+          max_tokens: 6000,
+          thinking: { type: THINK_MODE[model] || 'disabled' },
+          system: p.system,
+          messages: [{ role: 'user', content: p.user }]
+        };
+        var data = await callApiThinking(key, body);
+        var parsed = parseResults(extractText(data));
+        if (!parsed.length) {
+          var info = describeEmpty(data);
+          throw new Error('Claude returned nothing I could read (' + info + '). Try again, or try fewer posts.');
+        }
+        var byId = {};
+        for (var i = 0; i < parsed.length; i++) byId[parsed[i].id] = parsed[i];
+        for (var j = 0; j < posts.length; j++) {
+          var r = byId[j + 1];
+          items.push({
+            id: j + 1,
+            author: '',
+            text: posts[j],
+            verdict: r ? r.verdict : 'reply_later',
+            category: r ? r.category : 'Unrated',
+            reason: r ? r.reason : 'Claude did not return a verdict for this post.',
+            status: 'Open'
+          });
+        }
+        if (capped) notes.push('Only the first ' + MAX_POSTS + ' of ' + all.length + ' posts were read.');
+        var missing = posts.length - parsed.filter(function (x) { return x.id <= posts.length; }).length;
+        if (missing > 0) notes.push(missing + ' post' + (missing === 1 ? '' : 's') + ' came back without a verdict.');
       }
       state.items = items;
       state.fVerdict = 'all'; state.fCat = 'all'; state.fStatus = 'all';
       saveResults();
       renderAll();
-      var notes = [];
-      if (capped) notes.push('Only the first ' + MAX_POSTS + ' of ' + all.length + ' posts were read.');
-      var missing = posts.length - parsed.filter(function (x) { return x.id <= posts.length; }).length;
-      if (missing > 0) notes.push(missing + ' post' + (missing === 1 ? '' : 's') + ' came back without a verdict.');
-      showMsg(msgNode, notes.length ? 'warn' : 'ok', notes.length ? notes.join(' ') : 'Done. Scroll down for your results.');
+      showMsg(msgNode, notes.length ? 'warn' : 'ok', notes.length ? notes.join(' ') : 'Done. Found ' + items.length + ' post' + (items.length === 1 ? '' : 's') + '. Scroll down for your results.');
     } catch (e) {
       showMsg(msgNode, 'err', (e && e.message) ? e.message : 'Something went wrong. Please try again.');
     } finally {
@@ -554,6 +664,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
       head.appendChild(el('span', 'idx', '#' + x.id));
       card.appendChild(head);
 
+      if (x.author) card.appendChild(el('div', 'author', x.author));
       var post = el('p', 'post clamp', x.text);
       card.appendChild(post);
       var reason = el('p', 'reason');
@@ -618,6 +729,8 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
 
   // ---- wire up ----
   function init() {
+    $('smartChk').checked = lsGet(K_SMART) !== '0';
+    $('smartChk').addEventListener('change', function () { lsSet(K_SMART, $('smartChk').checked ? '1' : '0'); updateCounter(); });
     $('postsIn').addEventListener('input', updateCounter);
     $('critIn').value = lsGet(K_CRIT) || '';
     $('runBtn').addEventListener('click', analyze);
@@ -638,7 +751,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     updateCounter();
     renderAll();
   }
-  window.__sp = { splitPosts: splitPosts, parseResults: parseResults, MAX_POSTS: MAX_POSTS };
+  window.__sp = { splitPosts: splitPosts, parseResults: parseResults, parseSmart: parseSmart, normalizeRaw: normalizeRaw, MAX_POSTS: MAX_POSTS };
   init();
 })();
 </script>

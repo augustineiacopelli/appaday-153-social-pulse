@@ -145,6 +145,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
 .small { font-size: 0.82em; color: var(--muted); margin: 0; }
 .toggle { display: flex; gap: 10px; align-items: center; min-height: 44px; cursor: pointer; font-size: 0.92em; }
 .toggle input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--accent); }
+.toggle[hidden] { display: none; }
 .author { font-weight: 700; font-size: 0.9em; overflow-wrap: anywhere; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
@@ -170,6 +171,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
       <label class="lbl" for="postsIn">Posts or comments <span class="hint">paste straight from the page, mess and all</span></label>
       <textarea id="postsIn" placeholder="Select the posts or comments on the page, copy, and paste here. Buttons, timestamps, and reaction counts are fine, Claude skips them."></textarea>
       <label class="toggle" for="smartChk"><input type="checkbox" id="smartChk" checked><span>Smart read: Claude cleans up the paste and finds each post</span></label>
+      <label class="toggle" id="addRow" for="addChk" hidden><input type="checkbox" id="addChk"><span>Add these to the results below instead of replacing them</span></label>
       <p class="small" id="smartNote">Turn this off to split posts yourself with a blank line or a line of ---.</p>
       <div class="row">
         <span class="counter" id="counter" aria-live="polite">0 / 40 posts</span>
@@ -317,8 +319,10 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     var c = $('counter');
     var v = $('postsIn').value;
     if (smartOn()) {
-      var n = normalizeRaw(v).length;
-      c.textContent = n + ' / ' + MAX_CHARS + ' characters, up to ' + MAX_POSTS + ' posts' + (n > MAX_CHARS ? ' (only the first ' + MAX_CHARS + ' characters will be read)' : '');
+      var rawN = normalizeRaw(v);
+      var n = rawN.length;
+      var est = estimateComments(rawN);
+      c.textContent = n + ' / ' + MAX_CHARS + ' characters' + (est ? ', about ' + est + ' comment' + (est === 1 ? '' : 's') + ' spotted' : '') + ', up to ' + MAX_POSTS + ' posts per run' + (n > MAX_CHARS ? ' (only the first ' + MAX_CHARS + ' characters will be read)' : '');
       c.className = 'counter' + (n > MAX_CHARS ? ' over' : '');
     } else {
       var k = splitPosts(v).length;
@@ -655,11 +659,27 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
         var missing = posts.length - parsed.filter(function (x) { return x.id <= posts.length; }).length;
         if (missing > 0) notes.push(missing + ' post' + (missing === 1 ? '' : 's') + ' came back without a verdict.');
       }
-      state.items = items;
-      state.fVerdict = 'all'; state.fCat = 'all'; state.fStatus = 'all';
+      var okText = 'Done. Found ' + items.length + ' post' + (items.length === 1 ? '' : 's') + '. Scroll down for your results.';
+      if ($('addChk').checked && state.items.length) {
+        var have = {}, added = 0;
+        state.items.forEach(function (x) { have[((x.author || '') + '|' + x.text).toLowerCase()] = true; });
+        items.forEach(function (x) {
+          var k = ((x.author || '') + '|' + x.text).toLowerCase();
+          if (have[k]) return;
+          have[k] = true; added++;
+          state.items.push(x);
+        });
+        state.items.forEach(function (x, i) { x.id = i + 1; });
+        okText = 'Added ' + added + ' new post' + (added === 1 ? '' : 's') + ' (' + (items.length - added) + ' already in the list). The list now has ' + state.items.length + '.';
+        $('postsIn').value = '';
+        updateCounter();
+      } else {
+        state.items = items;
+        state.fVerdict = 'all'; state.fCat = 'all'; state.fStatus = 'all';
+      }
       saveResults();
       renderAll();
-      showMsg(msgNode, notes.length ? 'warn' : 'ok', notes.length ? notes.join(' ') : 'Done. Found ' + items.length + ' post' + (items.length === 1 ? '' : 's') + '. Scroll down for your results.');
+      showMsg(msgNode, notes.length ? 'warn' : 'ok', notes.length ? notes.join(' ') + ' ' + (okText.indexOf('Added') === 0 ? okText : '') : okText);
     } catch (e) {
       showMsg(msgNode, 'err', (e && e.message) ? e.message : 'Something went wrong. Please try again.');
     } finally {
@@ -780,6 +800,8 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
   }
   function renderAll() {
     $('results').hidden = state.items.length === 0;
+    $('addRow').hidden = state.items.length === 0;
+    if (!state.items.length) $('addChk').checked = false;
     if (!state.items.length) return;
     renderTally(); renderFilters(); renderCards();
   }

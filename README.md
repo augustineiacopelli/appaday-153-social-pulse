@@ -16,9 +16,10 @@ Each result card has Open, Later, and Done buttons so you can work through the l
 ## How to use it
 
 1. Tap the gear button and enter your Anthropic API key. Optionally give the session a name and write your reply criteria.
-2. Paste straight from the page into the box. The counter shows how much of the 60,000 character limit you have used.
+2. Paste straight from the page into the box. The counter shows how many characters you pasted and roughly how many comments it spotted, so you can check that the copy caught everything. Facebook only keeps the posts near your screen loaded, so a copy of a long page can miss the ones that scrolled away.
 3. Tap the button. Results appear below with a tally and filters.
 4. Mark cards Open, Later, or Done as you reply.
+5. To work through a long page in batches, scroll, copy and paste a section, run it, then tick the box that adds new posts to the results instead of replacing them. Posts already in the list are skipped and your statuses are kept.
 
 If the paste holds more than 40 posts, Claude reads the first 40 and the app tells you how many it found. If the paste looks like it holds many more comments than were found, or part of it failed, the app warns you so you can run it again. Smart read can be switched off for a classic mode where you split posts yourself with a blank line or a line of three dashes, and the app remembers your choice.
 

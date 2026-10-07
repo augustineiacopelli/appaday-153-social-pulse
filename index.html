@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="apple-touch-icon" href="https://augustineiacopelli.github.io/appaday/icons/153.png">
+<meta name="apple-mobile-web-app-title" content="Social Pulse">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Social Pulse | AppADay 153</title>
+<meta name="description" content="Paste a batch of social posts or comments and Claude flags which ones are worth a reply.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #12111c;
+  --bg2: #191827;
+  --panel: #1f1d30;
+  --panel2: #29263f;
+  --line: #373453;
+  --text: #f1eefb;
+  --muted: #a7a3c4;
+  --accent: #8576f5;
+  --accent-ink: #14112b;
+  --now: #43c58d;
+  --later: #e5ae3f;
+  --skip: #9a97b3;
+  --bad: #f07a8a;
+  --radius: 14px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100dvh;
+  background: radial-gradient(120% 70% at 50% -10%, #2a2552 0%, #16142a 45%, var(--bg) 100%);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: clamp(15px, 3.9vw, 17px);
+  line-height: 1.45;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+  background: rgba(18, 17, 28, 0.88);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+  backdrop-filter: blur(8px);
+}
+.topbar a.home {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px;
+  color: var(--text); text-decoration: none; font-weight: 500;
+}
+.badge-num {
+  font-family: 'DM Mono', monospace; font-size: 0.8em; color: var(--accent-ink);
+  background: var(--accent); border-radius: 6px; padding: 2px 7px; font-weight: 500;
+}
+.crumb { color: var(--muted); font-size: 0.85em; }
+.iconbtn {
+  min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); cursor: pointer; display: inline-flex;
+  align-items: center; justify-content: center;
+}
+.iconbtn:focus-visible, button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+main { flex: 1; width: 100%; padding: 14px 14px 28px; display: flex; flex-direction: column; gap: 14px; }
+.wrap { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; display: flex; flex-direction: column; gap: 14px; }
+h1 { font-size: clamp(1.5rem, 7vw, 2.1rem); margin: 6px 0 0; letter-spacing: -0.02em; line-height: 1.1; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+label.lbl { font-weight: 500; font-size: 0.92em; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.hint { color: var(--muted); font-weight: 400; font-size: 0.85em; }
+textarea, input[type="text"], input[type="password"], select {
+  width: 100%; background: var(--bg2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; min-height: 44px;
+}
+textarea { resize: vertical; min-height: 150px; }
+textarea.short { min-height: 70px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.counter { font-family: 'DM Mono', monospace; font-size: 0.85em; color: var(--muted); }
+.counter.over { color: var(--later); }
+button.btn {
+  min-height: 48px; padding: 0 20px; border-radius: 12px; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 700; flex: 1 1 auto;
+}
+button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+button.btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--line); font-weight: 500; flex: 0 0 auto; }
+.msg { border-radius: 10px; padding: 10px 12px; font-size: 0.92em; border: 1px solid var(--line); background: var(--bg2); }
+.msg.err { border-color: var(--bad); color: #ffd3da; }
+.msg.warn { border-color: var(--later); color: #ffe9bd; }
+.msg.ok { border-color: var(--now); color: #cdf5e2; }
+.spinner { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--accent-ink); border-top-color: transparent; animation: spin 0.8s linear infinite; vertical-align: -3px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tally div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; }
+.tally b { display: block; font-size: 1.5em; line-height: 1.1; }
+.tally span { font-size: 0.78em; color: var(--muted); }
+.t-now b { color: var(--now); } .t-later b { color: var(--later); } .t-skip b { color: var(--skip); }
+.filters { display: flex; flex-direction: column; gap: 8px; }
+.fgroup { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fgroup .fl { font-size: 0.78em; color: var(--muted); width: 58px; flex: 0 0 auto; text-transform: uppercase; letter-spacing: 0.06em; }
+.chip {
+  min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); font: inherit; font-size: 0.9em; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-left-width: 5px; border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.card.v-reply_now { border-left-color: var(--now); }
+.card.v-reply_later { border-left-color: var(--later); }
+.card.v-skip { border-left-color: var(--skip); }
+.card.done { opacity: 0.6; }
+.card-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pill { font-size: 0.78em; font-weight: 700; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.02em; }
+.pill.v-reply_now { background: rgba(67, 197, 141, 0.18); color: var(--now); }
+.pill.v-reply_later { background: rgba(229, 174, 63, 0.18); color: var(--later); }
+.pill.v-skip { background: rgba(154, 151, 179, 0.2); color: #c3c0d9; }
+.pill.cat { background: var(--panel2); color: var(--text); font-weight: 500; }
+.idx { font-family: 'DM Mono', monospace; font-size: 0.78em; color: var(--muted); margin-left: auto; }
+.post { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.95em; }
+.post.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.reason { margin: 0; color: var(--muted); font-size: 0.9em; }
+.reason b { color: var(--text); font-weight: 500; }
+.card-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.status-seg { display: flex; gap: 6px; flex: 1 1 auto; }
+.status-seg button { flex: 1 1 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg2); color: var(--text); font: inherit; font-size: 0.9em; cursor: pointer; }
+.status-seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.linkbtn { min-height: 44px; padding: 0 10px; background: none; border: 0; color: var(--accent); font: inherit; font-size: 0.88em; cursor: pointer; }
+.empty { text-align: center; color: var(--muted); padding: 24px 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
+footer { padding: 14px 14px calc(env(safe-area-inset-bottom) + 18px); text-align: center; color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); }
+footer a { color: var(--accent); display: inline-block; min-height: 44px; line-height: 44px; }
+.modal-back { position: fixed; inset: 0; background: rgba(8, 7, 16, 0.7); z-index: 50; display: none; align-items: center; justify-content: center; padding: 14px; }
+.modal-back.open { display: flex; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; width: 100%; max-width: 460px; max-height: 92dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.modal h2 { margin: 0; font-size: 1.2rem; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.small { font-size: 0.82em; color: var(--muted); margin: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="home" href="https://augustineiacopelli.github.io/appaday/" aria-label="AppADay portfolio home">
+    <span class="badge-num">153</span><span>Social Pulse</span><span class="crumb">AppADay</span>
+  </a>
+  <button class="iconbtn" id="gearBtn" type="button" aria-label="Settings">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  </button>
+</header>
+
+<main>
+  <div class="wrap">
+    <div>
+      <h1>Social Pulse</h1>
+      <p class="sub">Paste posts or comments. Claude tells you which ones deserve a reply.</p>
+    </div>
+
+    <section class="panel" id="intake" aria-label="Intake">
+      <label class="lbl" for="postsIn">Posts or comments <span class="hint">separate with a blank line or a line of ---</span></label>
+      <textarea id="postsIn" placeholder="Paste a batch of posts here. One post per paragraph, or divide them with a line that says ---"></textarea>
+      <label class="lbl" for="critIn">Your reply criteria <span class="hint">optional</span></label>
+      <textarea id="critIn" class="short" placeholder="Example: Reply to genuine questions and warm praise. Skip spam, arguments, and anything about politics."></textarea>
+      <div class="row">
+        <span class="counter" id="counter" aria-live="polite">0 / 40 posts</span>
+      </div>
+      <div class="row">
+        <button class="btn" id="runBtn" type="button">Find posts worth a reply</button>
+        <button class="btn ghost" id="clearBtn" type="button">Clear</button>
+      </div>
+      <div id="intakeMsg" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="results" hidden aria-label="Results">
+      <div class="tally" id="tally"></div>
+      <div class="filters" id="filters" style="margin-top:12px"></div>
+      <div class="row" style="margin-top:6px"><span class="counter" id="showing"></span></div>
+      <div class="cards" id="cards" style="margin-top:6px"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  AppADay 153 &middot; <a href="https://augustineiacopelli.github.io/appaday/">Back to the portfolio</a>
+</footer>
+
+<div class="modal-back" id="settingsBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <h2 id="setTitle">Settings</h2>
+    <div class="field">
+      <label class="lbl" for="keyIn">Anthropic API key</label>
+      <input type="password" id="keyIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-...">
+      <p class="small">Stored only in this browser. It is sent only to api.anthropic.com.</p>
+    </div>
+    <div class="field">
+      <label class="lbl" for="sessIn">Session name</label>
+      <input type="text" id="sessIn" autocomplete="off" maxlength="40" placeholder="Example: Monday inbox">
+      <p class="small">Statuses and results are saved in this browser under this name.</p>
+    </div>
+    <div class="row">
+      <button class="btn" id="setSave" type="button">Save</button>
+      <button class="btn ghost" id="setClose" type="button">Close</button>
+    </div>
+    <div id="setMsg" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var MAX_POSTS = 40;
+  var MODEL_FALLBACK = { haiku: 'claude-haiku-4-5-20251001', sonnet: 'claude-sonnet-5' };
+  var K_KEY = 'sp153-apikey', K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria';
+  var VERDICTS = { reply_now: 'Reply now', reply_later: 'Reply later', skip: 'Skip' };
+  var STATUSES = ['Open', 'Later', 'Done'];
+
+  var state = { items: [], busy: false, fVerdict: 'all', fCat: 'all', fStatus: 'all' };
+
+  // ---- guarded storage ----
+  function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function lsDel(k) { try { window.localStorage.removeItem(k); } catch (e) {} }
+  function sessName() { return (lsGet(K_SESS) || 'default').trim() || 'default'; }
+  function resultsKey() { return 'sp153-results-' + sessName(); }
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  // ---- model selection ----
+  var configPromise = null;
+  function loadConfig() {
+    if (!configPromise) {
+      configPromise = (async function () {
+        var urls = ['../config.json', 'https://augustineiacopelli.github.io/appaday/config.json'];
+        for (var i = 0; i < urls.length; i++) {
+          try {
+            var r = await fetch(urls[i], { cache: 'no-cache' });
+            if (!r.ok) continue;
+            var c = await r.json();
+            if (c && c.models) return c;
+          } catch (e) { /* try next */ }
+        }
+        return null;
+      })();
+    }
+    return configPromise;
+  }
+  async function getModel(tier) {
+    tier = tier || 'sonnet';
+    try {
+      var c = await loadConfig();
+      if (c && c.models && c.models[tier]) return c.models[tier];
+    } catch (e) {}
+    return MODEL_FALLBACK[tier] || MODEL_FALLBACK.sonnet;
+  }
+  // Add ?tier=haiku to the page address for cheap test runs.
+  function pickTier() {
+    try {
+      var t = new URLSearchParams(window.location.search).get('tier');
+      if (t === 'haiku') return 'haiku';
+    } catch (e) {}
+    return 'sonnet';
+  }
+
+  // ---- intake ----
+  function splitPosts(text) {
+    var norm = String(text || '').replace(/\r\n?/g, '\n').trim();
+    if (!norm) return [];
+    var parts = norm.split(/\n[ \t]*-{3,}[ \t]*\n|\n[ \t]*\n+/);
+    var out = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].replace(/^\s*-{3,}\s*$/gm, '').trim();
+      if (p) out.push(p);
+    }
+    return out;
+  }
+  function updateCounter() {
+    var n = splitPosts($('postsIn').value).length;
+    var c = $('counter');
+    c.textContent = n + ' / ' + MAX_POSTS + ' posts' + (n > MAX_POSTS ? ' (only the first ' + MAX_POSTS + ' will be read)' : '');
+    c.className = 'counter' + (n > MAX_POSTS ? ' over' : '');
+  }
+  function showMsg(node, kind, text) {
+    clear(node);
+    if (!text) return;
+    node.appendChild(el('div', 'msg ' + kind, text));
+  }
+
+  // ---- API ----
+  var THINK_MODE = {};
+  async function callApi(key, body) {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) {
+      var err = new Error((data && data.error && data.error.message) || ('Request failed with status ' + res.status));
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+  async function callApiThinking(key, body) {
+    try {
+      return await callApi(key, body);
+    } catch (e) {
+      var msg = String((e && e.message) || '');
+      if (e && e.status === 400 && msg.indexOf('between_tools') >= 0 && body.thinking && body.thinking.type !== 'between_tools') {
+        THINK_MODE[body.model] = 'between_tools';
+        body.thinking = { type: 'between_tools' };
+        return await callApi(key, body);
+      }
+      throw e;
+    }
+  }
+
+  function buildPrompt(posts, criteria) {
+    var sys = 'You triage social media posts and comments for a person deciding which ones deserve a personal reply. ' +
+      'For every post return a verdict: reply_now (a reply would clearly be valuable and timely), reply_later (worth a reply but not urgent), or skip (spam, bait, noise, or nothing to add). ' +
+      'Also return a short category label of one or two words (for example Question, Praise, Complaint, Opportunity, Debate, Spam, Update) and a reason of one plain sentence under 20 words. ' +
+      'Apply the reply criteria from the person when they are given. ' +
+      'Respond with ONLY a JSON array and no other text, one object per post, in order: ' +
+      '[{"id":1,"verdict":"reply_now","category":"Question","reason":"..."}]. Use the post numbers given as the id values.';
+    var lines = [];
+    if (criteria) lines.push('Reply criteria from the person:\n' + criteria + '\n');
+    lines.push('Posts:');
+    for (var i = 0; i < posts.length; i++) {
+      lines.push('[' + (i + 1) + '] ' + posts[i].replace(/\n+/g, ' ').slice(0, 1200));
+    }
+    return { system: sys, user: lines.join('\n') };
+  }
+
+  // ---- defensive parser ----
+  function normVerdict(v) {
+    var s = String(v || '').toLowerCase().replace(/[^a-z]+/g, '_').replace(/^_+|_+$/g, '');
+    if (s === 'reply_now' || s === 'now') return 'reply_now';
+    if (s === 'reply_later' || s === 'later') return 'reply_later';
+    if (s === 'skip' || s === 'ignore') return 'skip';
+    return null;
+  }
+  function parseResults(text) {
+    var t = String(text || '').trim();
+    if (!t) return [];
+    t = t.replace(/^```[a-zA-Z]*\s*/, '').replace(/\s*```\s*$/, '');
+    var arr = null;
+    var a = t.indexOf('['), b = t.lastIndexOf(']');
+    if (a >= 0 && b > a) {
+      try { arr = JSON.parse(t.slice(a, b + 1)); } catch (e) { arr = null; }
+    }
+    if (!arr) {
+      arr = [];
+      var re = /\{[^{}]*\}/g, m;
+      while ((m = re.exec(t)) !== null) {
+        try { arr.push(JSON.parse(m[0])); } catch (e) { /* skip bad fragment */ }
+      }
+    }
+    if (!Array.isArray(arr)) return [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var o = arr[i];
+      if (!o || typeof o !== 'object') continue;
+      var v = normVerdict(o.verdict);
+      if (!v) continue;
+      var id = parseInt(o.id, 10);
+      if (!(id >= 1)) id = i + 1;
+      var cat = String(o.category || 'Other').replace(/\s+/g, ' ').trim().slice(0, 24) || 'Other';
+      cat = cat.charAt(0).toUpperCase() + cat.slice(1);
+      out.push({ id: id, verdict: v, category: cat, reason: String(o.reason || '').trim().slice(0, 240) });
+    }
+    return out;
+  }
+  function describeEmpty(data) {
+    var types = [];
+    var blocks = (data && data.content) || [];
+    for (var i = 0; i < blocks.length; i++) types.push(blocks[i] && blocks[i].type);
+    var info = 'stop_reason=' + (data && data.stop_reason) + ' blocks=[' + types.join(',') + ']';
+    try { console.warn('Social Pulse: empty or unreadable result', info, data); } catch (e) {}
+    return info;
+  }
+  function extractText(data) {
+    var blocks = (data && data.content) || [], s = '';
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i] && blocks[i].type === 'text' && blocks[i].text) s += blocks[i].text;
+    }
+    return s;
+  }
+
+  async function analyze() {
+    if (state.busy) return;
+    var msgNode = $('intakeMsg');
+    var all = splitPosts($('postsIn').value);
+    if (!all.length) { showMsg(msgNode, 'warn', 'Paste at least one post first.'); return; }
+    var key = (lsGet(K_KEY) || '').trim();
+    if (!key) { showMsg(msgNode, 'warn', 'Add your Anthropic API key with the gear button first.'); openSettings(); return; }
+    var capped = all.length > MAX_POSTS;
+    var posts = all.slice(0, MAX_POSTS);
+    var criteria = $('critIn').value.trim();
+    lsSet(K_CRIT, criteria);
+
+    state.busy = true;
+    var btn = $('runBtn');
+    btn.disabled = true;
+    clear(btn);
+    btn.appendChild(el('span', 'spinner'));
+    btn.appendChild(document.createTextNode('Reading ' + posts.length + ' post' + (posts.length === 1 ? '' : 's') + '...'));
+    showMsg(msgNode, 'ok', '');
+
+    try {
+      var model = await getModel(pickTier());
+      var p = buildPrompt(posts, criteria);
+      var body = {
+        model: model,
+        max_tokens: 6000,
+        thinking: { type: THINK_MODE[model] || 'disabled' },
+        system: p.system,
+        messages: [{ role: 'user', content: p.user }]
+      };
+      var data = await callApiThinking(key, body);
+      var parsed = parseResults(extractText(data));
+      if (!parsed.length) {
+        var info = describeEmpty(data);
+        throw new Error('Claude returned nothing I could read (' + info + '). Try again, or try fewer posts.');
+      }
+      var byId = {};
+      for (var i = 0; i < parsed.length; i++) byId[parsed[i].id] = parsed[i];
+      var items = [];
+      for (var j = 0; j < posts.length; j++) {
+        var r = byId[j + 1];
+        items.push({
+          id: j + 1,
+          text: posts[j],
+          verdict: r ? r.verdict : 'reply_later',
+          category: r ? r.category : 'Unrated',
+          reason: r ? r.reason : 'Claude did not return a verdict for this post.',
+          status: 'Open'
+        });
+      }
+      state.items = items;
+      state.fVerdict = 'all'; state.fCat = 'all'; state.fStatus = 'all';
+      saveResults();
+      renderAll();
+      var notes = [];
+      if (capped) notes.push('Only the first ' + MAX_POSTS + ' of ' + all.length + ' posts were read.');
+      var missing = posts.length - parsed.filter(function (x) { return x.id <= posts.length; }).length;
+      if (missing > 0) notes.push(missing + ' post' + (missing === 1 ? '' : 's') + ' came back without a verdict.');
+      showMsg(msgNode, notes.length ? 'warn' : 'ok', notes.length ? notes.join(' ') : 'Done. Scroll down for your results.');
+    } catch (e) {
+      showMsg(msgNode, 'err', (e && e.message) ? e.message : 'Something went wrong. Please try again.');
+    } finally {
+      state.busy = false;
+      btn.disabled = false;
+      clear(btn);
+      btn.textContent = 'Find posts worth a reply';
+    }
+  }
+
+  // ---- persistence of results ----
+  function saveResults() {
+    lsSet(resultsKey(), JSON.stringify({ items: state.items }));
+  }
+  function loadResults() {
+    var raw = lsGet(resultsKey());
+    state.items = [];
+    if (!raw) return;
+    try {
+      var o = JSON.parse(raw);
+      if (o && Array.isArray(o.items)) state.items = o.items.filter(function (x) { return x && x.text && VERDICTS[x.verdict]; });
+    } catch (e) { state.items = []; }
+  }
+
+  // ---- rendering ----
+  function makeChip(label, pressed, onClick) {
+    var b = el('button', 'chip', label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function countBy(fn) {
+    var m = {};
+    for (var i = 0; i < state.items.length; i++) { var k = fn(state.items[i]); m[k] = (m[k] || 0) + 1; }
+    return m;
+  }
+  function renderTally() {
+    var t = $('tally'); clear(t);
+    var c = countBy(function (x) { return x.verdict; });
+    var defs = [['reply_now', 'Reply now', 't-now'], ['reply_later', 'Reply later', 't-later'], ['skip', 'Skip', 't-skip']];
+    for (var i = 0; i < defs.length; i++) {
+      var d = el('div', defs[i][2]);
+      d.appendChild(el('b', '', String(c[defs[i][0]] || 0)));
+      d.appendChild(el('span', '', defs[i][1]));
+      t.appendChild(d);
+    }
+  }
+  function renderFilters() {
+    var f = $('filters'); clear(f);
+    var g1 = el('div', 'fgroup'); g1.appendChild(el('span', 'fl', 'Verdict'));
+    [['all', 'All'], ['reply_now', 'Reply now'], ['reply_later', 'Reply later'], ['skip', 'Skip']].forEach(function (d) {
+      g1.appendChild(makeChip(d[1], state.fVerdict === d[0], function () { state.fVerdict = d[0]; renderFilters(); renderCards(); }));
+    });
+    f.appendChild(g1);
+
+    var cats = Object.keys(countBy(function (x) { return x.category; })).sort();
+    if (state.fCat !== 'all' && cats.indexOf(state.fCat) < 0) state.fCat = 'all';
+    var g2 = el('div', 'fgroup'); g2.appendChild(el('span', 'fl', 'Category'));
+    g2.appendChild(makeChip('All', state.fCat === 'all', function () { state.fCat = 'all'; renderFilters(); renderCards(); }));
+    cats.forEach(function (c) {
+      g2.appendChild(makeChip(c, state.fCat === c, function () { state.fCat = c; renderFilters(); renderCards(); }));
+    });
+    f.appendChild(g2);
+
+    var g3 = el('div', 'fgroup'); g3.appendChild(el('span', 'fl', 'Status'));
+    ['all'].concat(STATUSES).forEach(function (s) {
+      g3.appendChild(makeChip(s === 'all' ? 'All' : s, state.fStatus === s, function () { state.fStatus = s; renderFilters(); renderCards(); }));
+    });
+    f.appendChild(g3);
+  }
+  function renderCards() {
+    var wrap = $('cards'); clear(wrap);
+    var shown = state.items.filter(function (x) {
+      return (state.fVerdict === 'all' || x.verdict === state.fVerdict) &&
+        (state.fCat === 'all' || x.category === state.fCat) &&
+        (state.fStatus === 'all' || x.status === state.fStatus);
+    });
+    $('showing').textContent = 'Showing ' + shown.length + ' of ' + state.items.length;
+    if (!shown.length) { wrap.appendChild(el('div', 'empty', 'No posts match these filters.')); return; }
+    shown.forEach(function (x) {
+      var card = el('article', 'card v-' + x.verdict + (x.status === 'Done' ? ' done' : ''));
+      var head = el('div', 'card-head');
+      head.appendChild(el('span', 'pill v-' + x.verdict, VERDICTS[x.verdict]));
+      head.appendChild(el('span', 'pill cat', x.category));
+      head.appendChild(el('span', 'idx', '#' + x.id));
+      card.appendChild(head);
+
+      var post = el('p', 'post clamp', x.text);
+      card.appendChild(post);
+      var reason = el('p', 'reason');
+      reason.appendChild(el('b', '', 'Why: '));
+      reason.appendChild(document.createTextNode(x.reason || 'No reason given.'));
+      card.appendChild(reason);
+
+      var foot = el('div', 'card-foot');
+      var seg = el('div', 'status-seg');
+      STATUSES.forEach(function (s) {
+        var b = el('button', '', s);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', x.status === s ? 'true' : 'false');
+        b.addEventListener('click', function () { x.status = s; saveResults(); renderCards(); });
+        seg.appendChild(b);
+      });
+      foot.appendChild(seg);
+      var more = el('button', 'linkbtn', 'Show full post');
+      more.type = 'button';
+      more.addEventListener('click', function () {
+        var clamped = post.className.indexOf('clamp') >= 0;
+        post.className = clamped ? 'post' : 'post clamp';
+        more.textContent = clamped ? 'Show less' : 'Show full post';
+      });
+      foot.appendChild(more);
+      card.appendChild(foot);
+      wrap.appendChild(card);
+    });
+  }
+  function renderAll() {
+    $('results').hidden = state.items.length === 0;
+    if (!state.items.length) return;
+    renderTally(); renderFilters(); renderCards();
+  }
+
+  // ---- settings modal ----
+  function openSettings() {
+    $('keyIn').value = lsGet(K_KEY) || '';
+    $('sessIn').value = lsGet(K_SESS) || '';
+    showMsg($('setMsg'), 'ok', '');
+    var back = $('settingsBack');
+    back.className = 'modal-back open';
+    back.setAttribute('aria-hidden', 'false');
+    $('keyIn').focus();
+  }
+  function closeSettings() {
+    var back = $('settingsBack');
+    back.className = 'modal-back';
+    back.setAttribute('aria-hidden', 'true');
+    $('gearBtn').focus();
+  }
+  function saveSettings() {
+    var key = $('keyIn').value.trim();
+    var sess = $('sessIn').value.trim();
+    var oldSess = sessName();
+    var ok1 = key ? lsSet(K_KEY, key) : (lsDel(K_KEY), true);
+    var ok2 = sess ? lsSet(K_SESS, sess) : (lsDel(K_SESS), true);
+    if (!(ok1 && ok2)) { showMsg($('setMsg'), 'warn', 'This browser would not save settings. They will last only until you close the page.'); return; }
+    if (sessName() !== oldSess) { loadResults(); renderAll(); }
+    showMsg($('setMsg'), 'ok', 'Saved.');
+  }
+
+  // ---- wire up ----
+  function init() {
+    $('postsIn').addEventListener('input', updateCounter);
+    $('critIn').value = lsGet(K_CRIT) || '';
+    $('runBtn').addEventListener('click', analyze);
+    $('clearBtn').addEventListener('click', function () {
+      $('postsIn').value = '';
+      state.items = [];
+      lsDel(resultsKey());
+      showMsg($('intakeMsg'), 'ok', '');
+      updateCounter();
+      renderAll();
+    });
+    $('gearBtn').addEventListener('click', openSettings);
+    $('setClose').addEventListener('click', closeSettings);
+    $('setSave').addEventListener('click', saveSettings);
+    $('settingsBack').addEventListener('click', function (e) { if (e.target === $('settingsBack')) closeSettings(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSettings(); });
+    loadResults();
+    updateCounter();
+    renderAll();
+  }
+  window.__sp = { splitPosts: splitPosts, parseResults: parseResults, MAX_POSTS: MAX_POSTS };
+  init();
+})();
+</script>
+</body>
+</html>

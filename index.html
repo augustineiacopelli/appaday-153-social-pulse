@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="https://augustineiacopelli.github.io/appaday/manifests/153.webmanifest">
 <script src="https://augustineiacopelli.github.io/appaday/save.js" defer></script>
+<script src="https://augustineiacopelli.github.io/appaday/keys.js" data-app="153" data-legacy-key="sp153-apikey" data-accent="#5B4BC4" defer></script>
 <title>Social Pulse | AppADay 153</title>
 <meta name="description" content="Paste a batch of social posts or comments and Claude flags which ones are worth a reply.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -202,11 +203,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
 <div class="modal-back" id="settingsBack" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="setTitle">
     <h2 id="setTitle">Settings</h2>
-    <div class="field">
-      <label class="lbl" for="keyIn">Anthropic API key</label>
-      <input type="password" id="keyIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-...">
-      <p class="small">Stored only in this browser. It is sent only to api.anthropic.com.</p>
-    </div>
+    <div class="field" id="keyMount"><p class="small">The key manager is loading. If this stays, check your connection and reload.</p></div>
     <div class="field">
       <label class="lbl" for="critIn">Your reply criteria <span class="hint">optional</span></label>
       <textarea id="critIn" class="short" placeholder="Example: Reply to genuine questions and warm praise. Skip spam, arguments, and anything about politics."></textarea>
@@ -233,7 +230,7 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
   var MAX_CHARS = 60000;
   var CHUNK_CHARS = 12000;
   var MODEL_FALLBACK = { haiku: 'claude-haiku-4-5-20251001', sonnet: 'claude-sonnet-5' };
-  var K_KEY = 'sp153-apikey', K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria', K_SMART = 'sp153-smart';
+  var K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria', K_SMART = 'sp153-smart';
   var VERDICTS = { reply_now: 'Reply now', reply_later: 'Reply later', skip: 'Skip' };
   var STATUSES = ['Open', 'Later', 'Done'];
 
@@ -554,8 +551,9 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     var raw = normalizeRaw($('postsIn').value);
     var all = smart ? [] : splitPosts($('postsIn').value);
     if (smart ? !raw : !all.length) { showMsg(msgNode, 'warn', 'Paste at least one post first.'); return; }
-    var key = (lsGet(K_KEY) || '').trim();
-    if (!key) { showMsg(msgNode, 'warn', 'Add your Anthropic API key with the gear button first.'); openSettings(); return; }
+    if (!window.AppKeys) { showMsg(msgNode, 'warn', 'The key manager did not load. Check your connection and reload.'); return; }
+    var key = await window.AppKeys.get();
+    if (!key) { showMsg(msgNode, 'warn', 'Add your Claude API key with the gear button first.'); return; }
     var criteria = $('critIn').value.trim();
     lsSet(K_CRIT, criteria);
 
@@ -810,13 +808,12 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
 
   // ---- settings modal ----
   function openSettings() {
-    $('keyIn').value = lsGet(K_KEY) || '';
+    if (window.AppKeys) window.AppKeys.mountSettings($('keyMount'));
     $('sessIn').value = lsGet(K_SESS) || '';
     showMsg($('setMsg'), 'ok', '');
     var back = $('settingsBack');
     back.className = 'modal-back open';
     back.setAttribute('aria-hidden', 'false');
-    $('keyIn').focus();
   }
   function closeSettings() {
     var back = $('settingsBack');
@@ -825,10 +822,9 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
     $('gearBtn').focus();
   }
   function saveSettings() {
-    var key = $('keyIn').value.trim();
     var sess = $('sessIn').value.trim();
     var oldSess = sessName();
-    var ok1 = key ? lsSet(K_KEY, key) : (lsDel(K_KEY), true);
+    var ok1 = true;
     var ok2 = sess ? lsSet(K_SESS, sess) : (lsDel(K_SESS), true);
     if (!(ok1 && ok2)) { showMsg($('setMsg'), 'warn', 'This browser would not save settings. They will last only until you close the page.'); return; }
     if (sessName() !== oldSess) { loadResults(); renderAll(); }

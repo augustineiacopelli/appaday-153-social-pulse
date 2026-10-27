@@ -25,7 +25,7 @@ If the paste holds more than 40 posts, Claude reads the first 40 and the app tel
 
 ## Notes
 
-The app calls the Anthropic Messages API directly from the browser with your own key. The key, session name, and reply criteria are stored in this browser only and are never part of the source. The model comes from the portfolio config.json using the sonnet tier, with claude-sonnet-5 as the built in fallback. Adding `?tier=haiku` to the page address runs the cheaper Haiku model, which is handy for test runs. Extended thinking is turned off so the whole token budget goes to the answer, and if a reply ever comes back unreadable the app logs the stop reason and content block types to the console.
+The app calls the Anthropic Messages API directly from the browser with your own key. The key, session name, and reply criteria are stored in this browser only and are never part of the source. The model comes from the portal's shared models.js using the sonnet tier, which follows the portfolio config.json. Adding `?tier=haiku` to the page address runs the cheaper Haiku model, which is handy for test runs. Extended thinking is turned off so the whole token budget goes to the answer, and if a reply ever comes back unreadable the app logs the stop reason and content block types to the console.
 
 Social Pulse works on pasted text only. It does not connect to any social network.
 

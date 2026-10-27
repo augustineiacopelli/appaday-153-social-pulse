@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="https://augustineiacopelli.github.io/appaday/manifests/153.webmanifest">
 <script src="https://augustineiacopelli.github.io/appaday/save.js" defer></script>
+<script src="https://augustineiacopelli.github.io/appaday/models.js"></script>
 <script src="https://augustineiacopelli.github.io/appaday/keys.js" data-app="153" data-legacy-key="sp153-apikey" data-accent="#5B4BC4" defer></script>
 <title>Social Pulse | AppADay 153</title>
 <meta name="description" content="Paste a batch of social posts or comments and Claude flags which ones are worth a reply.">
@@ -229,7 +230,6 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
   var MAX_POSTS = 40;
   var MAX_CHARS = 60000;
   var CHUNK_CHARS = 12000;
-  var MODEL_FALLBACK = { haiku: 'claude-haiku-4-5-20251001', sonnet: 'claude-sonnet-5' };
   var K_SESS = 'sp153-session', K_CRIT = 'sp153-criteria', K_SMART = 'sp153-smart';
   var VERDICTS = { reply_now: 'Reply now', reply_later: 'Reply later', skip: 'Skip' };
   var STATUSES = ['Open', 'Later', 'Done'];
@@ -253,31 +253,9 @@ footer a { color: var(--accent); display: inline-block; min-height: 44px; line-h
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
   // ---- model selection ----
-  var configPromise = null;
-  function loadConfig() {
-    if (!configPromise) {
-      configPromise = (async function () {
-        var urls = ['../config.json', 'https://augustineiacopelli.github.io/appaday/config.json'];
-        for (var i = 0; i < urls.length; i++) {
-          try {
-            var r = await fetch(urls[i], { cache: 'no-cache' });
-            if (!r.ok) continue;
-            var c = await r.json();
-            if (c && c.models) return c;
-          } catch (e) { /* try next */ }
-        }
-        return null;
-      })();
-    }
-    return configPromise;
-  }
+  // The model for each tier comes from the portal models.js (config.json).
   async function getModel(tier) {
-    tier = tier || 'sonnet';
-    try {
-      var c = await loadConfig();
-      if (c && c.models && c.models[tier]) return c.models[tier];
-    } catch (e) {}
-    return MODEL_FALLBACK[tier] || MODEL_FALLBACK.sonnet;
+    return window.AppModels ? window.AppModels.get(tier || 'sonnet') : '';
   }
   // Add ?tier=haiku to the page address for cheap test runs.
   function pickTier() {
